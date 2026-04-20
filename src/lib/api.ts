@@ -7,7 +7,33 @@
  */
 import { getJwt, getAdminToken, clearSession } from '@/features/auth/token'
 
-const BASE = import.meta.env.VITE_API_URL ?? ''
+/**
+ * Normalise `VITE_API_URL` pour éviter les URLs cassées au moindre typo dans
+ * les variables Railway/Vercel :
+ *   - `""` / `undefined` → `""` (résolu en relatif vers l'origine courante via le proxy Vite en dev)
+ *   - `"https://api.foo.com"` → inchangé
+ *   - `"https://api.foo.com/"` → strip du slash final
+ *   - `"api.foo.com"` → ajout automatique de `https://`
+ *   - `"https:/api.foo.com"` ou autre garbage → warning console + fallback ''
+ */
+function normalizeBase(raw: string | undefined): string {
+  if (!raw) return ''
+  const trimmed = raw.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  // Cas valide : http:// ou https:// suivi d'un hostname
+  if (/^https?:\/\/[a-z0-9.-]+/i.test(trimmed)) return trimmed
+  // Cas sans protocole : on force https
+  if (/^[a-z0-9.-]+(\.[a-z]{2,})/i.test(trimmed)) return `https://${trimmed}`
+  // Autrement la valeur est cassée — warning + fallback origine
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[api] VITE_API_URL="${raw}" invalide. Attendu : "https://api.monprojet.up.railway.app". ` +
+    `Fallback sur l'origine courante (même domaine que l'admin).`,
+  )
+  return ''
+}
+
+const BASE = normalizeBase(import.meta.env.VITE_API_URL)
 
 export class ApiError extends Error {
   status: number

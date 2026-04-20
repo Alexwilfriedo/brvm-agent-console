@@ -17,12 +17,15 @@ function DeliveryBadge({ status }: { status: DeliveryStatus }) {
   return <Badge tone={tone}>{label}</Badge>
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('fr-FR', {
+    day: '2-digit', month: 'short', year: 'numeric',
   })
+  const time = d.toLocaleTimeString('fr-FR', {
+    hour: '2-digit', minute: '2-digit',
+  })
+  return `${date} · ${time}`
 }
 
 const columns: Column<BriefSummary>[] = [
@@ -36,8 +39,15 @@ const columns: Column<BriefSummary>[] = [
   {
     key: 'date',
     header: 'Date',
-    width: 'w-32',
-    cell: (b) => formatDate(b.brief_date),
+    width: 'w-56',
+    cell: (b) => (
+      <span className="flex items-center gap-2">
+        <span>{formatDateTime(b.brief_date)}</span>
+        {b.revision > 1 && (
+          <Badge tone="warning" size="sm">Rév. {b.revision}</Badge>
+        )}
+      </span>
+    ),
   },
   {
     key: 'summary',

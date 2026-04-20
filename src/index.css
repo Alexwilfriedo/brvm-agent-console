@@ -115,6 +115,18 @@ button:not(:disabled) {
 button:disabled {
   cursor: not-allowed;
 }
+/* Lien avec href ou onClick → pointer, sinon défaut texte. */
+a[href] {
+  cursor: pointer;
+}
+/* Éléments avec role="button" (cmdk, rows cliquables, etc.) */
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+/* Rows cliquables (table MarketPage) — détectées par onClick + hover:bg */
+tr[onclick], tbody tr.cursor-pointer {
+  cursor: pointer;
+}
 
 /*
  * Focus visible — défaut sobre.

@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { RefreshCw, Sparkles, TrendingUp, TrendingDown, Activity, BarChart3, ExternalLink } from 'lucide-react'
+import { RefreshCw, Sparkles, TrendingUp, TrendingDown, Activity, BarChart3, ExternalLink, ArrowUp, ArrowDown } from 'lucide-react'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -154,12 +154,70 @@ function MoversList({ rows, tone, onSelect }: { rows: QuoteRow[]; tone: 'up' | '
 
 // --- Main page ------------------------------------------------------------
 
+type SortKey = 'ticker' | 'name' | 'close_price' | 'variation_pct' | 'volume' | 'value_traded'
+type SortDir = 'asc' | 'desc'
+
+function SortHeader({
+  label, k, align, current, dir, onClick, hideOnMobile, hideOnLarge,
+}: {
+  label: string
+  k: SortKey
+  align: 'left' | 'right'
+  current: SortKey
+  dir: SortDir
+  onClick: (k: SortKey) => void
+  hideOnMobile?: boolean
+  hideOnLarge?: boolean
+}) {
+  const active = current === k
+  return (
+    <th
+      className={cn(
+        'px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider select-none',
+        active ? 'text-[var(--color-fg)]' : 'text-[var(--color-fg-muted)]',
+        align === 'left' ? 'text-left' : 'text-right',
+        hideOnMobile && 'hidden md:table-cell',
+        hideOnLarge && 'hidden lg:table-cell',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onClick(k)}
+        className={cn(
+          'inline-flex items-center gap-1.5 hover:text-[var(--color-fg)] transition-colors cursor-pointer',
+          align === 'right' && 'flex-row-reverse',
+        )}
+      >
+        <span>{label}</span>
+        {active ? (
+          dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
+        ) : (
+          <span className="opacity-30"><ArrowDown size={11} /></span>
+        )}
+      </button>
+    </th>
+  )
+}
+
 export function MarketPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [sectorFilter, setSectorFilter] = useState<string | null>(null)
+  // Défaut "pertinence financière" — cf. backend `build_snapshot`.
+  const [sortKey, setSortKey] = useState<SortKey>('value_traded')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const openTicker = (ticker: string) => navigate(`/market/${ticker}`)
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      // Défaut par colonne : numérique = desc (le plus grand d'abord), texte = asc
+      setSortDir(key === 'ticker' || key === 'name' ? 'asc' : 'desc')
+    }
+  }
 
   const snapshot = useQuery({
     queryKey: ['market', 'snapshot'],
@@ -181,6 +239,27 @@ export function MarketPage() {
     },
     onError: (err) => toast.error('Échec régénération', { description: (err as Error).message }),
   })
+
+  // HOOKS : tous les hooks doivent être appelés avant les early returns. On
+  // calcule `allQuotes` à partir de `snapshot.data?.all_quotes ?? []` pour
+  // rester safe pendant le loading.
+  const allQuotes = useMemo(() => {
+    const source = snapshot.data?.all_quotes ?? []
+    const filtered = sectorFilter
+      ? source.filter((q) => (q.sector || 'Autres') === sectorFilter)
+      : source
+    const sign = sortDir === 'asc' ? 1 : -1
+    const copy = [...filtered]
+    copy.sort((a, b) => {
+      const av = a[sortKey]
+      const bv = b[sortKey]
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return (av - bv) * sign
+      }
+      return String(av).localeCompare(String(bv)) * sign
+    })
+    return copy
+  }, [snapshot.data, sectorFilter, sortKey, sortDir])
 
   if (snapshot.isLoading) {
     return <>
@@ -210,9 +289,6 @@ export function MarketPage() {
 
   const s = snapshot.data
   const a = analysis.data
-  const allQuotes = sectorFilter
-    ? s.all_quotes.filter((q) => (q.sector || 'Autres') === sectorFilter)
-    : s.all_quotes
 
   return (
     <>
@@ -405,13 +481,13 @@ export function MarketPage() {
               <table className="w-full text-sm">
                 <thead className="bg-[var(--color-surface-2)]">
                   <tr>
-                    <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)]">Ticker</th>
-                    <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)]">Nom</th>
+                    <SortHeader label="Ticker" k="ticker" align="left" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortHeader label="Nom" k="name" align="left" current={sortKey} dir={sortDir} onClick={toggleSort} />
                     <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] hidden md:table-cell">Secteur</th>
-                    <th className="text-right px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)]">Cours</th>
-                    <th className="text-right px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)]">Var.</th>
-                    <th className="text-right px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] hidden md:table-cell">Volume</th>
-                    <th className="text-right px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] hidden lg:table-cell">Valeur</th>
+                    <SortHeader label="Cours" k="close_price" align="right" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortHeader label="Var." k="variation_pct" align="right" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortHeader label="Volume" k="volume" align="right" hideOnMobile current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortHeader label="Valeur" k="value_traded" align="right" hideOnLarge current={sortKey} dir={sortDir} onClick={toggleSort} />
                     <th className="w-10"></th>
                   </tr>
                 </thead>

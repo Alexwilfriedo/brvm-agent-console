@@ -18,7 +18,7 @@ export interface HealthResponse {
   sentry: boolean
 }
 
-export type RunStatus = 'running' | 'success' | 'failed' | 'skipped_locked'
+export type RunStatus = 'running' | 'success' | 'failed' | 'skipped_locked' | 'already_generated'
 export type RunTrigger = 'cron' | 'manual'
 
 export interface PipelineRun {
@@ -42,6 +42,8 @@ export interface BriefSummary {
   whatsapp_sent: boolean
   delivery_status: DeliveryStatus
   signals_count: number
+  revision: number
+  revised_at: string | null
 }
 
 export interface ScheduleConfig {
@@ -49,6 +51,7 @@ export interface ScheduleConfig {
   enabled: boolean
   updated_at: string
   next_run: string | null
+  scheduler_running: boolean
 }
 
 export interface Source {

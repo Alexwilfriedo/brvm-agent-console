@@ -64,12 +64,16 @@ export function SchedulePage() {
   })
 
   const triggerNow = useMutation({
-    mutationFn: () => apiFetch('/api/schedule/run-now', { method: 'POST' }),
-    onSuccess: () => {
-      toast.success('Pipeline déclenché', {
-        description: "Suivi dans l'onglet Exécutions.",
+    mutationFn: (force: boolean) =>
+      apiFetch(`/api/schedule/run-now${force ? '?force=true' : ''}`, { method: 'POST' }),
+    onSuccess: (_, force) => {
+      toast.success(force ? 'Régénération déclenchée' : 'Pipeline déclenché', {
+        description: force
+          ? "Création d'une nouvelle révision du brief du jour."
+          : "Suivi dans l'onglet Exécutions. Skippera si le brief du jour existe déjà.",
       })
       qc.invalidateQueries({ queryKey: ['runs'] })
+      qc.invalidateQueries({ queryKey: ['briefs'] })
     },
     onError: (err) => toast.error('Échec du déclenchement', { description: (err as Error).message }),
   })
@@ -92,11 +96,11 @@ export function SchedulePage() {
               const ok = await confirm({
                 title: 'Lancer un brief maintenant ?',
                 description:
-                  "Cette action déclenche immédiatement le pipeline complet (collecte, enrichissement LLM, synthèse, envoi). Coût ≈ 0,80 $ en crédits Anthropic.",
+                  "Déclenche le pipeline complet. Si un brief existe déjà pour aujourd'hui, le run sera skippé (idempotent par date). Coût ≈ 0,80 $ Anthropic.",
                 confirmLabel: 'Lancer',
                 tone: 'primary',
               })
-              if (ok) triggerNow.mutate()
+              if (ok) triggerNow.mutate(false)
             }}
           >
             <Play size={14} />

@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/*
+ * Charte BRVM Agent — cohérente avec le template email
+ * ------------------------------------------------------
+ * - Mode clair par défaut (ergonomique pour non-tech)
+ * - Mode sombre via data-theme="dark" sur <html>
+ * - Palette : navy #0A2540 + or #C9A961
+ * - Lexend pour l'UI, JetBrains Mono pour les données
+ */
+
+@theme {
+  /* Fonts */
+  --font-sans: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, 'Courier New', monospace;
+
+  /* Palette brand
+     --color-navy         : "navy en tant que TEXTE/ACCENT" — s'adapte au thème
+                            (dark en light, clair en dark pour rester lisible)
+     --color-navy-solid   : "navy SOLID FILL" — reste toujours dark navy
+                            (utilisé pour Button primary, Badge navy, etc.)
+     --color-navy-50      : conteneur brand pâle — s'adapte aussi
+  */
+  --color-navy: #0A2540;
+  --color-navy-600: #0F3352;
+  --color-navy-500: #1E4A6B;
+  --color-navy-50:  #EDF2F7;
+  --color-navy-solid:       #0A2540;
+  --color-navy-solid-hover: #0F3352;
+
+  --color-gold:     #C9A961;
+  --color-gold-600: #B8954E;
+  --color-gold-50:  #FAF5E6;
+
+  /* Status */
+  --color-success: #059669;
+  --color-success-bg: #DCFCE7;
+  --color-warning: #D97706;
+  --color-warning-bg: #FEF3C7;
+  --color-danger:  #DC2626;
+  --color-danger-bg: #FEE2E2;
+
+  /* Neutrals (light) */
+  --color-bg:        #FAFAF7;
+  --color-surface:   #FFFFFF;
+  --color-surface-2: #F8FAFC;
+  --color-border:    #E2E8F0;
+  --color-muted:     #F1F5F9;
+  --color-fg:        #0F172A;
+  --color-fg-muted:  #64748B;
+  --color-fg-subtle: #94A3B8;
+
+  /* Anneau de focus subtil (inset box-shadow) — adapté par thème */
+  --focus-ring: rgba(10, 37, 64, 0.15);
+
+  /* Ombre d'élévation premium (modaux, popovers) — adaptée par thème */
+  --shadow-elevated: 0 20px 50px -12px rgba(10, 37, 64, 0.25);
+}
+
+/* Dark mode — override via [data-theme="dark"] */
+[data-theme="dark"] {
+  --color-bg:        #0A0E14;
+  --color-surface:   #0F141B;
+  --color-surface-2: #141B24;
+  --color-border:    #1E293B;
+  --color-muted:     #1E2A38;
+  --color-fg:        #E2E8F0;
+  --color-fg-muted:  #94A3B8;
+  --color-fg-subtle: #64748B;
+
+  /* Brand : le navy "texte" devient clair pour rester lisible sur fond sombre.
+     Le navy-solid reste inchangé (utilisé pour Button/Badge fills). */
+  --color-navy:     #F1F5F9;
+  --color-navy-600: #CBD5E1;
+  --color-navy-500: #94A3B8;
+  --color-navy-50:  #162238;
+
+  /* Focus ring plus clair en mode sombre */
+  --focus-ring: rgba(241, 245, 249, 0.18);
+  /* Ombre noire profonde pour le "float" en mode sombre */
+  --shadow-elevated: 0 20px 50px -12px rgba(0, 0, 0, 0.65);
+}
+
+html {
+  color-scheme: light dark;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Tabular nums sur les données */
+.num, table td, .font-mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/*
+ * Curseurs — les <button> natifs ont cursor:default en HTML standard.
+ * Pour un admin premium on force un curseur cohérent : pointer quand
+ * cliquable, not-allowed quand désactivé.
+ */
+button:not(:disabled) {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * Focus visible — défaut sobre.
+ * Les composants stylés (Input, Select, Button, Command.Input) définissent
+ * leurs propres états focus. Ici c'est juste un fallback a11y pour les
+ * éléments non stylés.
+ */
+:focus { outline: none; }
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px rgba(10, 37, 64, 0.25);
+  border-radius: 4px;
+}
+/* Ne pas ajouter d'anneau sur les inputs / boutons / combobox : ils ont déjà un style */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[role="combobox"]:focus-visible,
+[cmdk-input]:focus-visible {
+  box-shadow: none;
+}
+
+/* Scrollbar discrète */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-fg-subtle); }

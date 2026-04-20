@@ -1,0 +1,398 @@
+import { useState } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import {
+  ArrowLeft, CheckCircle2, XCircle, Clock, AlertTriangle,
+  Download, Upload, Database, Sparkles, Send, Radio, ChevronRight, Copy, ExternalLink,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { PageHeader, PageContent } from '@/components/layout/PageHeader'
+import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { apiFetch } from '@/lib/api'
+import type { PipelineRun, RunStatus } from '@/lib/types'
+import { cn } from '@/lib/cn'
+import { LiveRunView } from '@/features/runs/LiveRunView'
+
+// --- Formatters -------------------------------------------------------------
+
+function formatDateTime(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+}
+
+function formatDuration(start: string, end: string | null): string {
+  if (!end) return 'en cours…'
+  const ms = new Date(end).getTime() - new Date(start).getTime()
+  if (ms < 1000) return `${ms} ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`
+  const min = Math.floor(ms / 60_000)
+  const sec = Math.round((ms % 60_000) / 1000)
+  return `${min} min ${sec.toString().padStart(2, '0')} s`
+}
+
+// --- Step metadata ----------------------------------------------------------
+
+interface StepDef {
+  key: string
+  label: string
+  icon: typeof Download
+  description?: (step: Record<string, unknown>) => string
+}
+
+const STEP_DEFS: Record<string, StepDef> = {
+  collect: {
+    key: 'collect',
+    label: 'Collecte',
+    icon: Download,
+    description: (s) =>
+      `${s.sources ?? 0} source(s) · ${s.news_count ?? 0} news · ${s.quotes_count ?? 0} cotations`,
+  },
+  persist: {
+    key: 'persist',
+    label: 'Persistance',
+    icon: Database,
+    description: (s) => `${s.new_news ?? 0} nouvelles news en base`,
+  },
+  enrich: {
+    key: 'enrich',
+    label: 'Enrichissement (Sonnet)',
+    icon: Sparkles,
+    description: (s) => `${s.count ?? 0} article(s) enrichi(s)`,
+  },
+  synthesize: {
+    key: 'synthesize',
+    label: 'Synthèse (Opus)',
+    icon: Radio,
+    description: (s) => `${s.opportunities ?? 0} opportunité(s) générée(s)`,
+  },
+  deliver: {
+    key: 'deliver',
+    label: 'Livraison',
+    icon: Send,
+    description: (s) => {
+      const parts: string[] = []
+      if (s.email_ok) parts.push('Email ✓')
+      if (s.whatsapp_ok) parts.push('WhatsApp ✓')
+      if (!s.email_ok && !s.whatsapp_ok) parts.push('aucune livraison')
+      return parts.join(' · ')
+    },
+  },
+}
+
+// --- Status UI --------------------------------------------------------------
+
+function StatusBadge({ status }: { status: RunStatus }) {
+  switch (status) {
+    case 'success':        return <Badge tone="success" size="md"><CheckCircle2 size={12} /> Réussi</Badge>
+    case 'failed':         return <Badge tone="danger"  size="md"><XCircle size={12} /> Échec</Badge>
+    case 'running':        return <Badge tone="gold"    size="md"><Clock size={12} /> En cours</Badge>
+    case 'skipped_locked': return <Badge tone="warning" size="md"><AlertTriangle size={12} /> Skippé (lock)</Badge>
+  }
+}
+
+// --- Timeline step ----------------------------------------------------------
+
+function hasStepError(step: Record<string, unknown>): boolean {
+  if (Array.isArray(step.errors) && step.errors.length > 0) return true
+  if (step.status === 'failed' || step.status === 'partial') return true
+  return false
+}
+
+function StepItem({
+  step,
+  index,
+  isLast,
+}: {
+  step: Record<string, unknown> & { step?: string }
+  index: number
+  isLast: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const def = STEP_DEFS[step.step ?? '']
+  const Icon = def?.icon ?? ChevronRight
+  const label = def?.label ?? step.step ?? 'Étape inconnue'
+  const desc = def?.description?.(step)
+  const errored = hasStepError(step)
+
+  return (
+    <div className="relative flex gap-4">
+      {/* Barre verticale connectante */}
+      {!isLast && (
+        <div className="absolute left-[15px] top-8 bottom-0 w-px bg-[var(--color-border)]" aria-hidden />
+      )}
+
+      {/* Icône step */}
+      <div
+        className={cn(
+          'relative flex-none w-8 h-8 rounded-full flex items-center justify-center border-2',
+          errored
+            ? 'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-[var(--color-danger)]/30'
+            : 'bg-[var(--color-success-bg)] text-[var(--color-success)] border-[var(--color-success)]/30'
+        )}
+      >
+        <Icon size={14} />
+      </div>
+
+      {/* Contenu */}
+      <div className="flex-1 min-w-0 pb-6">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-left group"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-[var(--color-fg-subtle)]">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <span className="text-sm font-medium text-[var(--color-fg)]">{label}</span>
+                {errored && <Badge tone="danger">erreur</Badge>}
+              </div>
+              {desc && (
+                <div className="mt-0.5 text-xs text-[var(--color-fg-muted)]">{desc}</div>
+              )}
+            </div>
+            <ChevronRight
+              size={14}
+              className={cn(
+                'flex-none text-[var(--color-fg-subtle)] transition-transform',
+                expanded && 'rotate-90'
+              )}
+            />
+          </div>
+        </button>
+
+        {expanded && (
+          <div className="mt-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden">
+            {Array.isArray(step.errors) && step.errors.length > 0 && (
+              <div className="px-4 py-3 bg-[var(--color-danger-bg)] border-b border-[var(--color-border)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-danger)] mb-1">
+                  Erreurs remontées
+                </div>
+                <ul className="text-xs text-[var(--color-danger)] font-mono space-y-1">
+                  {(step.errors as string[]).map((e, i) => <li key={i}>· {e}</li>)}
+                </ul>
+              </div>
+            )}
+            <pre className="px-4 py-3 text-[11px] font-mono text-[var(--color-fg)] overflow-x-auto leading-relaxed">
+              {JSON.stringify(step, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// --- Main page --------------------------------------------------------------
+
+export function RunDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [rawExpanded, setRawExpanded] = useState(false)
+
+  const run = useQuery({
+    queryKey: ['runs', id],
+    queryFn: () => apiFetch<PipelineRun>(`/api/runs/${id}`),
+    refetchInterval: (q) => (q.state.data?.status === 'running' ? 3000 : false),
+  })
+
+  if (run.isLoading) {
+    return (
+      <>
+        <PageHeader title="Exécution" subtitle="Chargement…" />
+        <PageContent>
+          <Card><CardBody><div className="py-10 text-center text-[var(--color-fg-subtle)]">…</div></CardBody></Card>
+        </PageContent>
+      </>
+    )
+  }
+
+  if (run.error || !run.data) {
+    return (
+      <>
+        <PageHeader title="Exécution introuvable" />
+        <PageContent>
+          <Card>
+            <CardBody className="text-center py-10">
+              <AlertTriangle size={28} className="mx-auto text-[var(--color-danger)] mb-3" />
+              <p className="text-sm text-[var(--color-fg)]">Ce run n'existe pas ou plus.</p>
+              <Button variant="ghost" size="sm" className="mt-4" onClick={() => navigate('/runs')}>
+                <ArrowLeft size={14} /> Retour à la liste
+              </Button>
+            </CardBody>
+          </Card>
+        </PageContent>
+      </>
+    )
+  }
+
+  const r = run.data
+  const summary = (r.summary ?? {}) as Record<string, unknown>
+  const steps = Array.isArray(summary.steps) ? (summary.steps as Record<string, unknown>[]) : []
+
+  function copyJson() {
+    navigator.clipboard.writeText(JSON.stringify(r, null, 2))
+    toast.success('JSON copié dans le presse-papier')
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={`Run #${r.id}`}
+        subtitle="Détail complet de l'exécution du pipeline."
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => navigate('/runs')}>
+              <ArrowLeft size={14} /> Liste
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => run.refetch()}>
+              <Upload size={14} className="rotate-180" /> Rafraîchir
+            </Button>
+            <Button variant="ghost" size="sm" onClick={copyJson}>
+              <Copy size={14} /> Copier JSON
+            </Button>
+          </>
+        }
+      />
+
+      <PageContent>
+        {/* Stream live (affiché en priorité tant que le run tourne) */}
+        {r.status === 'running' && (
+          <LiveRunView runId={r.id} enabled />
+        )}
+
+        {/* Overview */}
+        <Card>
+          <CardBody>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+              <Meta label="Statut">
+                <StatusBadge status={r.status} />
+              </Meta>
+              <Meta label="Trigger">
+                <Badge tone="neutral">{r.trigger === 'cron' ? 'Cron automatique' : 'Manuel'}</Badge>
+              </Meta>
+              <Meta label="Démarré">
+                <span className="text-sm font-mono text-[var(--color-fg)]">{formatDateTime(r.started_at)}</span>
+              </Meta>
+              <Meta label="Durée">
+                <span className="text-sm font-mono text-[var(--color-fg)]">
+                  {formatDuration(r.started_at, r.ended_at)}
+                </span>
+              </Meta>
+              <Meta label="Terminé">
+                <span className="text-sm font-mono text-[var(--color-fg)]">{formatDateTime(r.ended_at)}</span>
+              </Meta>
+              <Meta label="Brief produit">
+                {r.brief_id ? (
+                  <Link
+                    to={`/briefs/${r.brief_id}`}
+                    className="text-sm font-mono text-[var(--color-navy)] hover:underline inline-flex items-center gap-1"
+                  >
+                    #{r.brief_id} <ExternalLink size={11} />
+                  </Link>
+                ) : (
+                  <span className="text-[var(--color-fg-subtle)]">—</span>
+                )}
+              </Meta>
+              <Meta label="Étapes">
+                <span className="text-sm font-mono text-[var(--color-fg)]">{steps.length}</span>
+              </Meta>
+              <Meta label="Opportunités">
+                <span className="text-sm font-mono text-[var(--color-fg)]">
+                  {(steps.find((s) => s.step === 'synthesize')?.opportunities as number | undefined) ?? 0}
+                </span>
+              </Meta>
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Erreur fatale */}
+        {r.error && (
+          <Card className="border-[var(--color-danger)]/30">
+            <CardHeader>
+              <CardTitle className="text-[var(--color-danger)] flex items-center gap-2">
+                <AlertTriangle size={12} /> Erreur fatale
+              </CardTitle>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <pre className="font-mono text-[12px] leading-relaxed text-[var(--color-danger)] bg-[var(--color-danger-bg)] rounded-md p-4 overflow-x-auto whitespace-pre-wrap">
+                {r.error}
+              </pre>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Timeline des étapes */}
+        {steps.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Timeline des étapes</CardTitle>
+            </CardHeader>
+            <CardBody className="pt-2">
+              <div className="mt-2">
+                {steps.map((step, i) => (
+                  <StepItem
+                    key={i}
+                    step={step}
+                    index={i}
+                    isLast={i === steps.length - 1}
+                  />
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        ) : r.status === 'skipped_locked' ? (
+          <Card>
+            <CardBody className="text-center py-8">
+              <AlertTriangle size={20} className="mx-auto text-[var(--color-warning)] mb-2" />
+              <p className="text-sm text-[var(--color-fg)]">
+                Run skippé : un autre run était déjà en cours (lock Postgres actif).
+              </p>
+            </CardBody>
+          </Card>
+        ) : null}
+
+        {/* Résumé brut (JSON) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Résumé brut (JSON)</span>
+              <button
+                type="button"
+                onClick={() => setRawExpanded(!rawExpanded)}
+                className="text-[11px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+              >
+                {rawExpanded ? 'Masquer' : 'Afficher'}
+              </button>
+            </CardTitle>
+          </CardHeader>
+          {rawExpanded && (
+            <CardBody className="pt-0">
+              <pre className="font-mono text-[11px] leading-relaxed text-[var(--color-fg)] bg-[var(--color-surface-2)] rounded-md p-4 overflow-x-auto border border-[var(--color-border)]">
+                {JSON.stringify(summary, null, 2)}
+              </pre>
+            </CardBody>
+          )}
+        </Card>
+      </PageContent>
+    </>
+  )
+}
+
+function Meta({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1.5">
+        {label}
+      </div>
+      <div>{children}</div>
+    </div>
+  )
+}

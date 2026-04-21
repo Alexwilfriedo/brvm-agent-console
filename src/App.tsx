@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { VerifyPage } from '@/pages/VerifyPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { BriefsPage } from '@/pages/BriefsPage'
+import { BriefDetailPage } from '@/pages/BriefDetailPage'
 import { RunsPage } from '@/pages/RunsPage'
 import { RunDetailPage } from '@/pages/RunDetailPage'
 import { SourcesPage } from '@/pages/SourcesPage'
@@ -19,7 +20,6 @@ import { UsersPage } from '@/pages/UsersPage'
 import { MarketPage } from '@/pages/MarketPage'
 import { TickerDetailPage } from '@/pages/TickerDetailPage'
 import { PreviewPage } from '@/pages/PreviewPage'
-import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,7 +54,7 @@ export function App() {
                 <Route path="market" element={<MarketPage />} />
                 <Route path="market/:ticker" element={<TickerDetailPage />} />
                 <Route path="briefs" element={<BriefsPage />} />
-                <Route path="briefs/:id" element={<PlaceholderPage title="Détail du brief" description="Contenu structuré + signaux + livraison." />} />
+                <Route path="briefs/:id" element={<BriefDetailPage />} />
                 <Route path="runs" element={<RunsPage />} />
                 <Route path="runs/:id" element={<RunDetailPage />} />
                 <Route path="sources" element={<SourcesPage />} />

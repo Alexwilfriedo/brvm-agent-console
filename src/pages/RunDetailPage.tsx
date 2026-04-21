@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { apiFetch, ApiError } from '@/lib/api'
 import type {
-  BriefDetail, DeliveryStatus, PipelineRun, RedeliverResult, RunStatus,
+  BriefDetail, DeliveryStatus, PipelineRun, RedeliverResult, RunSource, RunStatus,
 } from '@/lib/types'
 import { cn } from '@/lib/cn'
 import { LiveRunView } from '@/features/runs/LiveRunView'
@@ -516,6 +516,11 @@ export function RunDetailPage() {
           </Card>
         ) : null}
 
+        {/* Recap par source */}
+        {(r.status === 'success' || r.status === 'failed') && (
+          <BySourceSection runId={r.id} />
+        )}
+
         {/* Résumé brut (JSON) */}
         <Card>
           <CardHeader>
@@ -550,6 +555,184 @@ function Meta({ label, children }: { label: string; children: React.ReactNode })
         {label}
       </div>
       <div>{children}</div>
+    </div>
+  )
+}
+
+// --- Recap par source ------------------------------------------------------
+
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  brvm_official: 'BRVM officiel',
+  sika_finance: 'Sika Finance (RSS)',
+  sika_quotes: 'Sika cotations',
+  sika_communiques: 'Sika communiqués (PDF)',
+  rss: 'RSS',
+}
+
+function formatSourceType(t: string | null | undefined): string {
+  if (!t) return '—'
+  return SOURCE_TYPE_LABELS[t] ?? t
+}
+
+function BySourceSection({ runId }: { runId: number }) {
+  const { data, isLoading, error } = useQuery<RunSource[]>({
+    queryKey: ['run-sources', runId],
+    queryFn: () => apiFetch<RunSource[]>(`/api/runs/${runId}/sources`),
+  })
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Par source</CardTitle></CardHeader>
+        <CardBody><p className="text-sm text-[var(--color-fg-subtle)]">Chargement…</p></CardBody>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Par source</CardTitle></CardHeader>
+        <CardBody>
+          <p className="text-sm text-[var(--color-danger)]">
+            Erreur : {(error as Error).message}
+          </p>
+        </CardBody>
+      </Card>
+    )
+  }
+
+  const sources = data ?? []
+  if (sources.length === 0) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Par source</CardTitle></CardHeader>
+        <CardBody>
+          <p className="text-sm text-[var(--color-fg-subtle)]">
+            Pas de détail par source disponible pour ce run (antérieur à la mise
+            en place du recap, ou pipeline skippé).
+          </p>
+        </CardBody>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          Par source <span className="text-[var(--color-fg-muted)] font-normal">({sources.length})</span>
+        </CardTitle>
+      </CardHeader>
+      <CardBody className="pt-2 space-y-3">
+        {sources.map((src) => (
+          <SourceCard key={src.source_key} src={src} />
+        ))}
+      </CardBody>
+    </Card>
+  )
+}
+
+function SourceCard({ src }: { src: RunSource }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasErrors = src.errors.length > 0
+  const hasNews = src.news.length > 0
+
+  return (
+    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-surface-2)] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-[var(--color-surface-3)] transition-colors text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <ChevronRight
+            size={14}
+            className={cn(
+              'text-[var(--color-fg-muted)] transition-transform shrink-0',
+              expanded && 'rotate-90'
+            )}
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-[var(--color-fg)] truncate">
+              {src.source_name ?? src.source_key}
+            </div>
+            <div className="text-[11px] text-[var(--color-fg-muted)] font-mono truncate">
+              {src.source_key} · {formatSourceType(src.source_type)}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hasErrors && (
+            <Badge tone="danger" size="sm">
+              {src.errors.length} erreur{src.errors.length > 1 ? 's' : ''}
+            </Badge>
+          )}
+          <Badge tone="neutral" size="sm">
+            {src.news_count} news
+            {src.new_news_count > 0 && (
+              <span className="ml-1 text-[var(--color-success)]">· {src.new_news_count} nouvelle{src.new_news_count > 1 ? 's' : ''}</span>
+            )}
+          </Badge>
+          {src.quotes_count > 0 && (
+            <Badge tone="neutral" size="sm">{src.quotes_count} cotations</Badge>
+          )}
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-[var(--color-border)] px-4 py-3 space-y-3">
+          {hasErrors && (
+            <div className="space-y-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-danger)]">
+                Erreurs de collecte
+              </div>
+              <ul className="text-xs text-[var(--color-fg)] space-y-1">
+                {src.errors.map((e, i) => (
+                  <li key={i} className="font-mono break-all">• {e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {hasNews ? (
+            <div className="space-y-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)]">
+                Articles capturés ({src.news.length})
+              </div>
+              <ul className="divide-y divide-[var(--color-border)]">
+                {src.news.map((n) => (
+                  <li key={`${n.url}-${n.id}`} className="py-2 flex items-start gap-2">
+                    <a
+                      href={n.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-[var(--color-fg)] hover:text-[var(--color-navy)] hover:underline inline-flex items-center gap-1 min-w-0 flex-1"
+                    >
+                      <span className="truncate">{n.title}</span>
+                      <ExternalLink size={11} className="shrink-0" />
+                    </a>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {n.tickers_mentioned.length > 0 && (
+                        <span className="text-[10px] font-mono text-[var(--color-navy)]">
+                          {n.tickers_mentioned.join(' · ')}
+                        </span>
+                      )}
+                      {n.enriched ? (
+                        <Badge tone="success" size="sm">enrichi</Badge>
+                      ) : (
+                        <Badge tone="neutral" size="sm">brut</Badge>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : !hasErrors ? (
+            <p className="text-xs text-[var(--color-fg-subtle)]">
+              Aucun article capturé dans ce run.
+            </p>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }

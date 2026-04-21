@@ -24,7 +24,9 @@ function formatDateTime(iso: string | null): string {
 
 const TYPE_LABELS: Record<string, string> = {
   brvm_official: 'BRVM officiel',
-  sika_finance: 'Sika Finance',
+  sika_finance: 'Sika Finance (RSS)',
+  sika_quotes: 'Sika cotations',
+  sika_communiques: 'Sika communiqués (PDF)',
   rss: 'RSS',
 }
 

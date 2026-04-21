@@ -32,6 +32,27 @@ export interface PipelineRun {
   summary: Record<string, unknown>
 }
 
+export interface RunNews {
+  id: number | null
+  source_key: string
+  title: string
+  url: string
+  published_at: string | null
+  tickers_mentioned: string[]
+  enriched: boolean
+}
+
+export interface RunSource {
+  source_key: string
+  source_name: string | null
+  source_type: string | null
+  news_count: number
+  quotes_count: number
+  new_news_count: number
+  errors: string[]
+  news: RunNews[]
+}
+
 export type DeliveryStatus =
   | 'pending'
   | 'delivered'

@@ -1,4 +1,5 @@
 import { ExternalLink, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -81,13 +82,13 @@ const columns: Column<BriefSummary>[] = [
     align: 'right',
     cell: (b) => (
       <a
-        href={`/preview/brief/${b.id}`}
+        href={`/briefs/${b.id}`}
         target="_blank"
         rel="noreferrer"
         onClick={(e) => e.stopPropagation()}
         className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--color-muted)] text-[var(--color-fg-muted)]"
-        aria-label="Aperçu email"
-        title="Aperçu email"
+        aria-label="Ouvrir dans un nouvel onglet"
+        title="Ouvrir dans un nouvel onglet"
       >
         <ExternalLink size={14} />
       </a>
@@ -96,6 +97,7 @@ const columns: Column<BriefSummary>[] = [
 ]
 
 export function BriefsPage() {
+  const navigate = useNavigate()
   const t = useListQuery<BriefSummary>({
     resource: 'briefs',
     path: '/api/briefs',
@@ -125,6 +127,7 @@ export function BriefsPage() {
           rowKey={(b) => b.id}
           loading={t.loading}
           error={t.error as Error | null}
+          onRowClick={(b) => navigate(`/briefs/${b.id}`)}
           searchPlaceholder="Rechercher dans le résumé…"
           emptyMessage="Aucun brief généré pour l'instant."
           {...t.tableProps}

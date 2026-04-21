@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
+import { API_BASE } from '@/lib/api'
 import { getAdminToken, getJwt } from '@/features/auth/token'
 
 /**
@@ -98,7 +99,11 @@ export function useRunEventStream(runId: number, enabled: boolean) {
       // Pas authentifié → on ne connecte pas. L'UI reste sur "idle".
       return
     }
-    const url = `/api/runs/${runId}/stream?token=${encodeURIComponent(token)}`
+    // URL absolue obligatoire en prod : l'admin et l'API sont sur deux
+    // domaines Railway distincts, donc une URL relative tombe sur l'origine
+    // du front (qui n'expose pas /api/runs/*/stream). En dev, API_BASE === ""
+    // et le proxy Vite (vite.config.ts) réécrit /api vers 127.0.0.1:8000.
+    const url = `${API_BASE}/api/runs/${runId}/stream?token=${encodeURIComponent(token)}`
     const es = new EventSource(url)
     sourceRef.current = es
 

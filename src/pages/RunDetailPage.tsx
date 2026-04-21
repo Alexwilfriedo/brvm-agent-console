@@ -1,17 +1,20 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, CheckCircle2, XCircle, Clock, AlertTriangle,
   Download, Upload, Database, Sparkles, Send, Radio, ChevronRight, Copy, ExternalLink,
+  RotateCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { apiFetch } from '@/lib/api'
-import type { PipelineRun, RunStatus } from '@/lib/types'
+import { apiFetch, ApiError } from '@/lib/api'
+import type {
+  BriefDetail, DeliveryStatus, PipelineRun, RedeliverResult, RunStatus,
+} from '@/lib/types'
 import { cn } from '@/lib/cn'
 import { LiveRunView } from '@/features/runs/LiveRunView'
 
@@ -93,6 +96,115 @@ function StatusBadge({ status }: { status: RunStatus }) {
     case 'running':        return <Badge tone="gold"    size="md"><Clock size={12} /> En cours</Badge>
     case 'skipped_locked': return <Badge tone="warning" size="md"><AlertTriangle size={12} /> Skippé (lock)</Badge>
   }
+}
+
+function DeliveryBadge({ status }: { status: DeliveryStatus }) {
+  switch (status) {
+    case 'delivered':
+      return <Badge tone="success" size="md"><CheckCircle2 size={12} /> Livré</Badge>
+    case 'partial':
+      return <Badge tone="warning" size="md"><AlertTriangle size={12} /> Partiel</Badge>
+    case 'failed':
+      return <Badge tone="danger" size="md"><XCircle size={12} /> Échec</Badge>
+    case 'pending':
+      return <Badge tone="gold" size="md"><Clock size={12} /> En attente</Badge>
+    case 'failed_synth':
+      return <Badge tone="danger" size="md"><XCircle size={12} /> Synthèse en échec</Badge>
+  }
+}
+
+/**
+ * Carte "Livraison" — affichée quand le run a produit un brief.
+ *
+ * Montre l'état actuel de la livraison (email + whatsapp) et, si applicable,
+ * propose de rejouer l'envoi. Le backend (`POST /api/briefs/:id/redeliver`)
+ * ne touche qu'à la livraison : pas de nouvelle révision, pas de re-appel
+ * Opus, pas de nouveau PipelineRun.
+ *
+ * Le bouton est caché pour les statuts `delivered` (rien à faire) et
+ * `failed_synth` (payload stub, re-livrer n'a pas de sens — il faut
+ * relancer le pipeline entier).
+ */
+function DeliverySection({
+  brief,
+  onRedeliver,
+  redelivering,
+}: {
+  brief: BriefDetail
+  onRedeliver: () => void
+  redelivering: boolean
+}) {
+  const canRetry =
+    brief.delivery_status === 'failed' ||
+    brief.delivery_status === 'partial' ||
+    brief.delivery_status === 'pending'
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span>Livraison du brief #{brief.id}</span>
+          <DeliveryBadge status={brief.delivery_status} />
+        </CardTitle>
+      </CardHeader>
+      <CardBody className="pt-0 space-y-3">
+        <div className="grid grid-cols-2 gap-5 text-sm">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1">
+              Email
+            </div>
+            <div className="font-mono text-[var(--color-fg)]">
+              {brief.email_sent ? '✓ envoyé' : '✗ non envoyé'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1">
+              WhatsApp
+            </div>
+            <div className="font-mono text-[var(--color-fg)]">
+              {brief.whatsapp_sent ? '✓ envoyé' : '— non configuré / non envoyé'}
+            </div>
+          </div>
+        </div>
+
+        {brief.delivery_errors && (
+          <div className="rounded-md bg-[var(--color-danger-bg)] border border-[var(--color-danger)]/30 px-3 py-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-danger)] mb-1">
+              Dernière erreur
+            </div>
+            <div className="font-mono text-[12px] text-[var(--color-danger)] whitespace-pre-wrap break-all">
+              {brief.delivery_errors}
+            </div>
+          </div>
+        )}
+
+        {canRetry && (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <p className="text-xs text-[var(--color-fg-muted)]">
+              Rejoue uniquement l'envoi email + WhatsApp. Ne relance pas la
+              synthèse Opus et ne crée pas de nouvelle révision.
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onRedeliver}
+              disabled={redelivering}
+            >
+              <RotateCw size={14} className={cn(redelivering && 'animate-spin')} />
+              {redelivering ? 'Envoi en cours…' : 'Rejouer la livraison'}
+            </Button>
+          </div>
+        )}
+
+        {brief.delivery_status === 'failed_synth' && (
+          <p className="text-xs text-[var(--color-fg-muted)]">
+            Le payload de synthèse est invalide (stub Opus). Re-livrer n'a pas
+            de sens — il faut relancer le pipeline entier via la planification.
+          </p>
+        )}
+      </CardBody>
+    </Card>
+  )
 }
 
 // --- Timeline step ----------------------------------------------------------
@@ -197,10 +309,45 @@ export function RunDetailPage() {
   const navigate = useNavigate()
   const [rawExpanded, setRawExpanded] = useState(false)
 
+  const queryClient = useQueryClient()
+
   const run = useQuery({
     queryKey: ['runs', id],
     queryFn: () => apiFetch<PipelineRun>(`/api/runs/${id}`),
     refetchInterval: (q) => (q.state.data?.status === 'running' ? 3000 : false),
+  })
+
+  // Brief produit par ce run (si le run a atteint l'étape synthesize).
+  // On utilise ce détail pour afficher l'état de livraison et conditionner
+  // l'affichage du bouton "Rejouer la livraison".
+  const briefId = run.data?.brief_id ?? null
+  const brief = useQuery({
+    queryKey: ['briefs', briefId],
+    queryFn: () => apiFetch<BriefDetail>(`/api/briefs/${briefId}`),
+    enabled: briefId !== null,
+  })
+
+  const redeliver = useMutation({
+    mutationFn: () => apiFetch<RedeliverResult>(
+      `/api/briefs/${briefId}/redeliver`,
+      { method: 'POST' },
+    ),
+    onSuccess: (result) => {
+      if (result.status === 'delivered') {
+        toast.success('Brief renvoyé avec succès')
+      } else if (result.status === 'partial') {
+        toast.warning(`Livraison partielle : ${result.errors.join(' · ')}`)
+      } else {
+        toast.error(`Échec : ${result.errors.join(' · ')}`)
+      }
+      // Rafraîchit le brief (delivery_status mis à jour) et la liste de runs.
+      queryClient.invalidateQueries({ queryKey: ['briefs', briefId] })
+      queryClient.invalidateQueries({ queryKey: ['runs', id] })
+    },
+    onError: (err) => {
+      const msg = err instanceof ApiError ? err.message : 'Erreur inconnue'
+      toast.error(`Impossible de rejouer : ${msg}`)
+    },
   })
 
   if (run.isLoading) {
@@ -312,6 +459,16 @@ export function RunDetailPage() {
             </div>
           </CardBody>
         </Card>
+
+        {/* Livraison — affiché quand le run a produit un brief. Couvre le cas
+            "le brief existe mais Brevo a timeout" → bouton de retry ciblé. */}
+        {brief.data && (
+          <DeliverySection
+            brief={brief.data}
+            onRedeliver={() => redeliver.mutate()}
+            redelivering={redeliver.isPending}
+          />
+        )}
 
         {/* Erreur fatale */}
         {r.error && (

@@ -32,7 +32,12 @@ export interface PipelineRun {
   summary: Record<string, unknown>
 }
 
-export type DeliveryStatus = 'pending' | 'delivered' | 'partial' | 'failed'
+export type DeliveryStatus =
+  | 'pending'
+  | 'delivered'
+  | 'partial'
+  | 'failed'
+  | 'failed_synth'
 
 export interface BriefSummary {
   id: number
@@ -44,6 +49,34 @@ export interface BriefSummary {
   signals_count: number
   revision: number
   revised_at: string | null
+}
+
+export interface BriefDetail {
+  id: number
+  brief_date: string
+  summary_markdown: string
+  payload: Record<string, unknown>
+  email_sent: boolean
+  whatsapp_sent: boolean
+  delivery_status: DeliveryStatus
+  delivery_errors: string | null
+  revision: number
+  revised_at: string | null
+  signals: Array<{
+    ticker: string
+    direction: string
+    conviction: number
+    thesis: string
+    price_at_signal: number | null
+  }>
+}
+
+export interface RedeliverResult {
+  brief_id: number
+  status: 'delivered' | 'partial' | 'failed'
+  email_ok: boolean
+  whatsapp_ok: boolean
+  errors: string[]
 }
 
 export interface ScheduleConfig {

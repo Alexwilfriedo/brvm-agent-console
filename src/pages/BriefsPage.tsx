@@ -8,10 +8,11 @@ import type { BriefSummary, DeliveryStatus } from '@/lib/types'
 
 function DeliveryBadge({ status }: { status: DeliveryStatus }) {
   const map: Record<DeliveryStatus, { tone: 'success' | 'warning' | 'danger' | 'neutral'; label: string }> = {
-    delivered: { tone: 'success', label: 'Livré' },
-    partial:   { tone: 'warning', label: 'Partiel' },
-    failed:    { tone: 'danger',  label: 'Échec' },
-    pending:   { tone: 'neutral', label: 'En attente' },
+    delivered:    { tone: 'success', label: 'Livré' },
+    partial:      { tone: 'warning', label: 'Partiel' },
+    failed:       { tone: 'danger',  label: 'Échec' },
+    pending:      { tone: 'neutral', label: 'En attente' },
+    failed_synth: { tone: 'danger',  label: 'Synthèse KO' },
   }
   const { tone, label } = map[status]
   return <Badge tone={tone}>{label}</Badge>

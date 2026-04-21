@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { API_BASE } from '@/lib/api'
 
 type Variant = 'full' | 'empty' | 'error'
 
@@ -13,7 +14,9 @@ const VARIANTS: { key: Variant; label: string; desc: string }[] = [
 
 export function PreviewPage() {
   const [variant, setVariant] = useState<Variant>('full')
-  const src = `/preview/brief?variant=${variant}`
+  // `/preview/brief` est exposé par l'API (pas la console) — on doit préfixer
+  // avec API_BASE sinon l'iframe tombe sur le catch-all SPA de la console.
+  const src = `${API_BASE}/preview/brief?variant=${variant}`
 
   return (
     <>

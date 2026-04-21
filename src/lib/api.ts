@@ -35,6 +35,15 @@ function normalizeBase(raw: string | undefined): string {
 
 const BASE = normalizeBase(import.meta.env.VITE_API_URL)
 
+/**
+ * Base URL de l'API, exposée pour les cas rares où un composant doit
+ * construire lui-même une URL (ex: `<iframe src={...}>` pour /preview/brief,
+ * où on ne peut pas passer par `fetch`).
+ * En dev : `""` → URL relative → le proxy Vite prend le relais.
+ * En prod : `https://api.monprojet.up.railway.app` (sans slash final).
+ */
+export const API_BASE = BASE
+
 export class ApiError extends Error {
   status: number
   body: unknown

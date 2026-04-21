@@ -57,9 +57,21 @@ const DIRECTION_META: Record<string, { label: string; tone: 'success' | 'warning
 
 // --- Opportunity card -------------------------------------------------------
 
+interface Valuation {
+  dpa_current?: number | null
+  dpa_estimate?: number | null
+  p_b_current?: number | null
+  p_b_estimate?: number | null
+  per_current?: number | null
+  per_estimate?: number | null
+  dividend_yield_current?: number | null
+  dividend_yield_estimate?: number | null
+}
+
 interface Opportunity {
   ticker: string
   name?: string
+  sector?: string
   direction?: string
   conviction?: number
   time_horizon?: 'court' | 'moyen' | 'long' | null
@@ -67,14 +79,58 @@ interface Opportunity {
   signals?: string[]
   catalysts?: string[]
   risks?: string[]
+  price_current?: number | null
+  price_target?: number | null
+  gain_potential_pct?: number | null
+  price_range_min?: number | null
+  price_range_max?: number | null
+  valuation?: Valuation | null
   entry_zone_fcfa?: string | null
   invalidation?: string | null
+}
+
+function formatFcfa(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—'
+  return n.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' FCFA'
+}
+
+function formatPct(n: number | null | undefined, digits = 2): string {
+  if (n == null || !Number.isFinite(n)) return '—'
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(digits)}%`
+}
+
+function formatNum(n: number | null | undefined, digits = 2): string {
+  if (n == null || !Number.isFinite(n)) return '—'
+  return n.toFixed(digits)
 }
 
 function OpportunityCard({ opp, signalPrice }: { opp: Opportunity; signalPrice?: number | null }) {
   const dir = DIRECTION_META[opp.direction ?? 'watch'] ?? DIRECTION_META.watch
   const Icon = dir.icon
   const conviction = Math.max(1, Math.min(5, opp.conviction ?? 3))
+
+  // Gain potentiel : couleur selon signe
+  const gain = opp.gain_potential_pct
+  const gainColor =
+    gain == null ? 'text-[var(--color-fg-muted)]'
+    : gain >= 0   ? 'text-[var(--color-success)]'
+    :               'text-[var(--color-danger)]'
+
+  // Bloc prix affiché seulement si au moins une valeur présente
+  const hasPriceBlock =
+    opp.price_current != null || opp.price_target != null || opp.gain_potential_pct != null
+
+  // Bloc valuation
+  const v = opp.valuation ?? {}
+  const hasValuation =
+    v.dpa_current != null || v.dpa_estimate != null ||
+    v.p_b_current != null || v.p_b_estimate != null ||
+    v.per_current != null || v.per_estimate != null ||
+    v.dividend_yield_current != null || v.dividend_yield_estimate != null
+
+  // Range d'entrée
+  const hasRange = opp.price_range_min != null && opp.price_range_max != null
 
   return (
     <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-surface-2)]">
@@ -89,6 +145,9 @@ function OpportunityCard({ opp, signalPrice }: { opp: Opportunity; signalPrice?:
             </Link>
             {opp.name && (
               <span className="text-sm text-[var(--color-fg-muted)]">— {opp.name}</span>
+            )}
+            {opp.sector && (
+              <Badge tone="neutral" size="sm">{opp.sector}</Badge>
             )}
           </div>
           {opp.time_horizon && (
@@ -118,10 +177,62 @@ function OpportunityCard({ opp, signalPrice }: { opp: Opportunity; signalPrice?:
           </div>
         </div>
       </div>
+
+      {/* Bloc prix / gain potentiel — le plus saillant */}
+      {hasPriceBlock && (
+        <div className="px-4 py-3 grid grid-cols-3 gap-3 border-b border-[var(--color-border)] bg-[var(--color-muted)]">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1">
+              Cours du jour
+            </div>
+            <div className="text-sm font-mono text-[var(--color-fg)]">{formatFcfa(opp.price_current)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1">
+              Cours cible
+            </div>
+            <div className="text-sm font-mono text-[var(--color-fg)]">{formatFcfa(opp.price_target)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1">
+              Gain potentiel
+            </div>
+            <div className={cn('text-base font-mono font-semibold', gainColor)}>{formatPct(gain)}</div>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 py-3 space-y-3">
         {opp.thesis && (
           <p className="text-sm text-[var(--color-fg)] leading-relaxed">{opp.thesis}</p>
         )}
+
+        {/* Valuation table */}
+        {hasValuation && (
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1.5">
+              Ratios fondamentaux
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border border-[var(--color-border)] rounded-md overflow-hidden">
+                <thead className="bg-[var(--color-muted)]">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-semibold text-[var(--color-fg-muted)]">Ratio</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-[var(--color-fg-muted)]">Actuel</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-[var(--color-fg-muted)]">Estimé</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <ValuationRow label="DPA (FCFA)" current={v.dpa_current} estimate={v.dpa_estimate} fmt={formatNum} />
+                  <ValuationRow label="P/B" current={v.p_b_current} estimate={v.p_b_estimate} fmt={formatNum} />
+                  <ValuationRow label="PER" current={v.per_current} estimate={v.per_estimate} fmt={formatNum} />
+                  <ValuationRow label="Rend. Dividende" current={v.dividend_yield_current} estimate={v.dividend_yield_estimate} fmt={(n) => formatPct(n, 2)} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {(opp.signals?.length ?? 0) > 0 && (
           <DetailList label="Signaux" items={opp.signals ?? []} />
         )}
@@ -131,21 +242,41 @@ function OpportunityCard({ opp, signalPrice }: { opp: Opportunity; signalPrice?:
         {(opp.risks?.length ?? 0) > 0 && (
           <DetailList label="Risques" items={opp.risks ?? []} tone="danger" />
         )}
-        {(opp.entry_zone_fcfa || opp.invalidation || signalPrice !== undefined) && (
+        {(hasRange || opp.entry_zone_fcfa || opp.invalidation || signalPrice != null) && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-[var(--color-border)]">
-            {opp.entry_zone_fcfa && (
+            {hasRange ? (
+              <KV label="Zone d'entrée" value={`${formatFcfa(opp.price_range_min)} — ${formatFcfa(opp.price_range_max)}`} />
+            ) : opp.entry_zone_fcfa ? (
               <KV label="Zone d'entrée" value={opp.entry_zone_fcfa} />
-            )}
+            ) : null}
             {opp.invalidation && (
               <KV label="Invalidation" value={opp.invalidation} />
             )}
             {signalPrice != null && (
-              <KV label="Prix au signal" value={`${signalPrice.toLocaleString('fr-FR')} FCFA`} />
+              <KV label="Prix au signal" value={formatFcfa(signalPrice)} />
             )}
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+function ValuationRow({
+  label, current, estimate, fmt,
+}: {
+  label: string
+  current: number | null | undefined
+  estimate: number | null | undefined
+  fmt: (n: number | null | undefined) => string
+}) {
+  if (current == null && estimate == null) return null
+  return (
+    <tr className="border-t border-[var(--color-border)]">
+      <td className="px-2 py-1.5 text-[var(--color-fg)]">{label}</td>
+      <td className="px-2 py-1.5 text-right font-mono text-[var(--color-fg)]">{fmt(current)}</td>
+      <td className="px-2 py-1.5 text-right font-mono text-[var(--color-fg-muted)]">{fmt(estimate)}</td>
+    </tr>
   )
 }
 

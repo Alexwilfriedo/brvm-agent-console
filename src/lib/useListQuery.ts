@@ -28,7 +28,7 @@ export function useListQuery<T>({
   resource,
   path,
   filters = {},
-  pageSize = 50,
+  pageSize = 10,
   refetchInterval,
 }: Options) {
   const [search, setSearch] = useState('')

@@ -10,11 +10,13 @@ import { VerifyPage } from '@/pages/VerifyPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { BriefsPage } from '@/pages/BriefsPage'
 import { BriefDetailPage } from '@/pages/BriefDetailPage'
+import { BriefComparePage } from '@/pages/BriefComparePage'
 import { RunsPage } from '@/pages/RunsPage'
 import { RunDetailPage } from '@/pages/RunDetailPage'
 import { SourcesPage } from '@/pages/SourcesPage'
 import { SourceDetailPage } from '@/pages/SourceDetailPage'
 import { RecipientsPage } from '@/pages/RecipientsPage'
+import { TradesPage } from '@/pages/TradesPage'
 import { SchedulePage } from '@/pages/SchedulePage'
 import { UsersPage } from '@/pages/UsersPage'
 import { MarketPage } from '@/pages/MarketPage'
@@ -55,11 +57,13 @@ export function App() {
                 <Route path="market/:ticker" element={<TickerDetailPage />} />
                 <Route path="briefs" element={<BriefsPage />} />
                 <Route path="briefs/:id" element={<BriefDetailPage />} />
+                <Route path="briefs/:id/compare" element={<BriefComparePage />} />
                 <Route path="runs" element={<RunsPage />} />
                 <Route path="runs/:id" element={<RunDetailPage />} />
                 <Route path="sources" element={<SourcesPage />} />
                 <Route path="sources/:id" element={<SourceDetailPage />} />
                 <Route path="recipients" element={<RecipientsPage />} />
+                <Route path="trades" element={<TradesPage />} />
                 <Route path="schedule" element={<SchedulePage />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="preview" element={<PreviewPage />} />

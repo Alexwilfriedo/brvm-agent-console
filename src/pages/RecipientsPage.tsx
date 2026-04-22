@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Mail, MessageSquare, Plus, Power, Trash2, RefreshCw } from 'lucide-react'
+import { Mail, MessageSquare, Pencil, Plus, Power, Trash2, RefreshCw } from 'lucide-react'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -10,14 +10,28 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { EditRecipientDialog } from '@/components/ui/EditRecipientDialog'
 import { useListQuery } from '@/lib/useListQuery'
 import { apiFetch, ApiError } from '@/lib/api'
-import type { Channel, Recipient } from '@/lib/types'
+import type { Channel, Recipient, RecipientFrequency } from '@/lib/types'
+
+const FREQUENCY_META: Record<RecipientFrequency, { label: string; tone: 'navy' | 'gold' | 'neutral' }> = {
+  daily:         { label: 'Daily',    tone: 'neutral' },
+  weekly:        { label: 'Hebdo',    tone: 'navy'    },
+  critical_only: { label: 'Critique', tone: 'gold'    },
+}
+
+function FrequencyBadge({ frequency }: { frequency: RecipientFrequency | undefined }) {
+  const freq = (frequency ?? 'daily') as RecipientFrequency
+  const meta = FREQUENCY_META[freq] ?? FREQUENCY_META.daily
+  return <Badge tone={meta.tone} size="sm">{meta.label}</Badge>
+}
 
 export function RecipientsPage() {
   const qc = useQueryClient()
   const confirm = useConfirm()
   const [channelFilter, setChannelFilter] = useState<Channel | ''>('')
+  const [editing, setEditing] = useState<Recipient | null>(null)
 
   const t = useListQuery<Recipient>({
     resource: 'recipients',
@@ -80,6 +94,13 @@ export function RecipientsPage() {
         ),
     },
     {
+      key: 'frequency',
+      header: 'Fréquence',
+      width: 'w-32',
+      hideOnMobile: true,
+      cell: (r) => <FrequencyBadge frequency={r.frequency} />,
+    },
+    {
       key: 'enabled',
       header: 'État',
       width: 'w-28',
@@ -93,6 +114,18 @@ export function RecipientsPage() {
       align: 'right',
       cell: (r) => (
         <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              setEditing(r)
+            }}
+            title="Modifier"
+            aria-label="Modifier"
+          >
+            <Pencil size={13} />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -204,6 +237,11 @@ export function RecipientsPage() {
           {...t.tableProps}
         />
       </PageContent>
+
+      <EditRecipientDialog
+        recipient={editing}
+        onOpenChange={(open) => { if (!open) setEditing(null) }}
+      />
     </>
   )
 }
@@ -216,18 +254,26 @@ function AddRecipientForm({ onCreated }: AddFormProps) {
   const [channel, setChannel] = useState<Channel>('email')
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
+  const [frequency, setFrequency] = useState<RecipientFrequency>('daily')
   const [error, setError] = useState<string | null>(null)
 
   const create = useMutation({
     mutationFn: () =>
       apiFetch<Recipient>('/api/recipients', {
         method: 'POST',
-        body: { channel, address: address.trim(), name: name.trim() || null, enabled: true },
+        body: {
+          channel,
+          address: address.trim(),
+          name: name.trim() || null,
+          enabled: true,
+          frequency: channel === 'email' ? frequency : 'daily',
+        },
       }),
     onSuccess: (created) => {
       toast.success('Destinataire ajouté', { description: `${created.channel} · ${created.address}` })
       setAddress('')
       setName('')
+      setFrequency('daily')
       setError(null)
       onCreated()
     },
@@ -283,6 +329,23 @@ function AddRecipientForm({ onCreated }: AddFormProps) {
               placeholder="Alex"
             />
           </label>
+          {channel === 'email' && (
+            <div className="flex-none w-40">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-muted)] mb-1">
+                Fréquence
+              </span>
+              <Select value={frequency} onValueChange={(v) => setFrequency(v as RecipientFrequency)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Hebdo</SelectItem>
+                  <SelectItem value="critical_only">Critique</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Button
             type="submit"
             variant="accent"

@@ -4,12 +4,13 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { API_BASE } from '@/lib/api'
 
-type Variant = 'full' | 'empty' | 'error'
+type Variant = 'full' | 'empty' | 'error' | 'weekly'
 
 const VARIANTS: { key: Variant; label: string; desc: string }[] = [
-  { key: 'full',  label: 'Complet', desc: '3 opportunités + snapshot + alertes' },
-  { key: 'empty', label: 'Sans signal', desc: "Jour calme — honnêteté de l'analyste" },
-  { key: 'error', label: 'Dégradé', desc: 'Synthèse LLM échouée' },
+  { key: 'full',   label: 'Daily complet', desc: '3 opportunités + snapshot + alertes' },
+  { key: 'empty',  label: 'Daily sans signal', desc: "Jour calme — honnêteté analyste" },
+  { key: 'error',  label: 'Daily dégradé', desc: 'Synthèse LLM échouée' },
+  { key: 'weekly', label: 'Hebdomadaire', desc: 'Audit 7j — scorecard + plays + leçons' },
 ]
 
 export function PreviewPage() {

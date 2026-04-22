@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw, Inbox } from 'lucide-react'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useListQuery } from '@/lib/useListQuery'
-import type { PipelineRun, RunStatus, RunTrigger } from '@/lib/types'
+import type { PipelineRun, PipelineType, RunStatus, RunTrigger } from '@/lib/types'
 
 function StatusBadge({ status }: { status: RunStatus }) {
   switch (status) {
-    case 'success':        return <Badge tone="success"><CheckCircle2 size={10} /> Réussi</Badge>
-    case 'failed':         return <Badge tone="danger"><XCircle size={10} /> Échec</Badge>
-    case 'running':        return <Badge tone="gold"><Clock size={10} /> En cours</Badge>
-    case 'skipped_locked': return <Badge tone="warning"><AlertTriangle size={10} /> Skippé</Badge>
+    case 'success':           return <Badge tone="success"><CheckCircle2 size={10} /> Réussi</Badge>
+    case 'failed':            return <Badge tone="danger"><XCircle size={10} /> Échec</Badge>
+    case 'running':           return <Badge tone="gold"><Clock size={10} /> En cours</Badge>
+    case 'skipped_locked':    return <Badge tone="warning"><AlertTriangle size={10} /> Skippé</Badge>
+    case 'already_generated': return <Badge tone="neutral"><CheckCircle2 size={10} /> Déjà généré</Badge>
+    case 'no_data':           return <Badge tone="neutral"><Inbox size={10} /> Aucune donnée</Badge>
   }
 }
 
@@ -43,12 +45,19 @@ const STATUS_FILTERS: { value: RunStatus | ''; label: string }[] = [
   { value: 'failed',          label: 'Échecs' },
   { value: 'running',         label: 'En cours' },
   { value: 'skipped_locked',  label: 'Skippés' },
+  { value: 'no_data',         label: 'Aucune donnée' },
 ]
 
 const TRIGGER_FILTERS: { value: RunTrigger | ''; label: string }[] = [
   { value: '',       label: 'Tous' },
   { value: 'cron',   label: 'Cron' },
   { value: 'manual', label: 'Manuel' },
+]
+
+const TYPE_FILTERS: { value: PipelineType | ''; label: string }[] = [
+  { value: '',       label: 'Tous' },
+  { value: 'daily',  label: 'Daily' },
+  { value: 'weekly', label: 'Hebdo' },
 ]
 
 const columns: Column<PipelineRun>[] = [
@@ -58,6 +67,17 @@ const columns: Column<PipelineRun>[] = [
     width: 'w-16',
     mono: true,
     cell: (r) => r.id,
+  },
+  {
+    key: 'type',
+    header: 'Type',
+    width: 'w-24',
+    cell: (r) =>
+      r.pipeline_type === 'weekly' ? (
+        <Badge tone="navy" size="sm">Hebdo</Badge>
+      ) : (
+        <Badge tone="neutral" size="sm">Daily</Badge>
+      ),
   },
   {
     key: 'status',
@@ -131,6 +151,7 @@ export function RunsPage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<RunStatus | ''>('')
   const [trigger, setTrigger] = useState<RunTrigger | ''>('')
+  const [pipelineType, setPipelineType] = useState<PipelineType | ''>('')
 
   const t = useListQuery<PipelineRun>({
     resource: 'runs',
@@ -138,6 +159,7 @@ export function RunsPage() {
     filters: {
       status: status || undefined,
       trigger: trigger || undefined,
+      pipeline_type: pipelineType || undefined,
     },
     // Auto-refresh 30s tant qu'il y a un run "running"
     refetchInterval: 30_000,
@@ -157,6 +179,7 @@ export function RunsPage() {
       />
       <PageContent>
         <div className="flex flex-wrap items-center gap-3">
+          <FilterPill label="Type" value={pipelineType} onChange={setPipelineType} options={TYPE_FILTERS} />
           <FilterPill label="Statut" value={status} onChange={setStatus} options={STATUS_FILTERS} />
           <FilterPill label="Trigger" value={trigger} onChange={setTrigger} options={TRIGGER_FILTERS} />
         </div>

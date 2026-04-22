@@ -18,8 +18,16 @@ export interface HealthResponse {
   sentry: boolean
 }
 
-export type RunStatus = 'running' | 'success' | 'failed' | 'skipped_locked' | 'already_generated'
+export type RunStatus =
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'skipped_locked'
+  | 'already_generated'
+  | 'no_data'
 export type RunTrigger = 'cron' | 'manual'
+
+export type PipelineType = 'daily' | 'weekly'
 
 export interface PipelineRun {
   id: number
@@ -27,6 +35,7 @@ export interface PipelineRun {
   ended_at: string | null
   status: RunStatus
   trigger: RunTrigger
+  pipeline_type: PipelineType
   brief_id: number | null
   error: string | null
   summary: Record<string, unknown>
@@ -60,9 +69,12 @@ export type DeliveryStatus =
   | 'failed'
   | 'failed_synth'
 
+export type BriefType = 'daily' | 'weekly'
+
 export interface BriefSummary {
   id: number
   brief_date: string
+  brief_type: BriefType
   summary_markdown: string
   email_sent: boolean
   whatsapp_sent: boolean
@@ -75,6 +87,7 @@ export interface BriefSummary {
 export interface BriefDetail {
   id: number
   brief_date: string
+  brief_type: BriefType
   summary_markdown: string
   payload: Record<string, unknown>
   email_sent: boolean
@@ -90,6 +103,9 @@ export interface BriefDetail {
     thesis: string
     price_at_signal: number | null
   }>
+  /** Q-1 A/B : payload produit par le modèle alternatif (null si A/B désactivé). */
+  payload_alt: Record<string, unknown> | null
+  model_alt: string | null
 }
 
 export interface RedeliverResult {
@@ -98,13 +114,21 @@ export interface RedeliverResult {
   email_ok: boolean
   whatsapp_ok: boolean
   errors: string[]
+  sent_to: string[]
+}
+
+export interface RedeliverTarget {
+  email: string
+  name?: string | null
 }
 
 export interface ScheduleConfig {
   cron_expression: string
+  weekly_cron_expression: string | null
   enabled: boolean
   updated_at: string
   next_run: string | null
+  weekly_next_run: string | null
   scheduler_running: boolean
 }
 
@@ -124,12 +148,44 @@ export interface Source {
 
 export type Channel = 'email' | 'whatsapp'
 
+export type TradeAction = 'buy' | 'sell'
+export type TradeReason = 'brief' | 'intuition' | 'news' | 'other'
+
+export interface Trade {
+  id: number
+  ticker: string
+  action: TradeAction
+  quantity: number
+  unit_price: number
+  executed_at: string
+  reason: TradeReason
+  brief_id: number | null
+  signal_id: number | null
+  notes: string | null
+  created_at: string
+}
+
+export interface TradeCreate {
+  ticker: string
+  action: TradeAction
+  quantity: number
+  unit_price: number
+  executed_at?: string | null
+  reason: TradeReason
+  brief_id?: number | null
+  signal_id?: number | null
+  notes?: string | null
+}
+
+export type RecipientFrequency = 'daily' | 'weekly' | 'critical_only'
+
 export interface Recipient {
   id: number
   channel: Channel
   address: string
   name: string | null
   enabled: boolean
+  frequency: RecipientFrequency
   notes: string | null
   created_at: string
   updated_at: string

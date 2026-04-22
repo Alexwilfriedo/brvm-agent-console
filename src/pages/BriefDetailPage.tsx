@@ -10,9 +10,10 @@ import { PageHeader, PageContent } from '@/components/layout/PageHeader'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { RedeliverDialog } from '@/components/ui/RedeliverDialog'
+import { WeeklyBriefView, type WeeklyPayload } from '@/components/brief/WeeklyBriefView'
 import { apiFetch, ApiError } from '@/lib/api'
-import type { BriefDetail, DeliveryStatus, RedeliverResult } from '@/lib/types'
+import type { BriefDetail, DeliveryStatus, RedeliverResult, RedeliverTarget } from '@/lib/types'
 import { cn } from '@/lib/cn'
 
 // --- Formatters -------------------------------------------------------------
@@ -328,8 +329,8 @@ export function BriefDetailPage() {
   const briefId = id ? parseInt(id, 10) : NaN
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const confirm = useConfirm()
   const [rawExpanded, setRawExpanded] = useState(false)
+  const [redeliverOpen, setRedeliverOpen] = useState(false)
 
   const { data: brief, isLoading, error, refetch } = useQuery<BriefDetail>({
     queryKey: ['brief', briefId],
@@ -337,19 +338,31 @@ export function BriefDetailPage() {
     enabled: !isNaN(briefId),
   })
 
-  const redeliver = useMutation<RedeliverResult>({
-    mutationFn: () =>
-      apiFetch<RedeliverResult>(`/api/briefs/${briefId}/redeliver`, { method: 'POST' }),
-    onSuccess: (r) => {
+  const redeliver = useMutation<RedeliverResult, Error, RedeliverTarget[] | null>({
+    mutationFn: (recipients) =>
+      apiFetch<RedeliverResult>(`/api/briefs/${briefId}/redeliver`, {
+        method: 'POST',
+        body: recipients ? { recipients } : undefined,
+      }),
+    onSuccess: (r, recipients) => {
+      const isTargeted = recipients !== null
       if (r.status === 'delivered') {
-        toast.success('Brief re-livré avec succès')
+        toast.success(
+          isTargeted
+            ? `Envoyé à ${r.sent_to.length} destinataire${r.sent_to.length > 1 ? 's' : ''}`
+            : 'Brief re-livré avec succès',
+        )
       } else if (r.status === 'partial') {
         toast.warning('Livraison partielle', { description: r.errors.join(' · ') })
       } else {
         toast.error('Échec de la re-livraison', { description: r.errors.join(' · ') })
       }
-      qc.invalidateQueries({ queryKey: ['brief', briefId] })
-      qc.invalidateQueries({ queryKey: ['briefs'] })
+      setRedeliverOpen(false)
+      // En mode ciblé le statut du brief n'a pas changé — pas la peine d'invalider.
+      if (!isTargeted) {
+        qc.invalidateQueries({ queryKey: ['brief', briefId] })
+        qc.invalidateQueries({ queryKey: ['briefs'] })
+      }
     },
     onError: (err) => {
       const msg = err instanceof ApiError ? err.message : (err as Error).message
@@ -390,6 +403,7 @@ export function BriefDetailPage() {
     )
   }
 
+  const isWeekly = brief.brief_type === 'weekly'
   const payload = (brief.payload ?? {}) as {
     market_summary?: string
     market_regime?: string | null
@@ -413,7 +427,10 @@ export function BriefDetailPage() {
       <PageHeader
         title={
           <span className="flex items-center gap-3 flex-wrap">
-            <span>Brief #{brief.id}</span>
+            <span>{isWeekly ? 'Brief hebdo' : 'Brief'} #{brief.id}</span>
+            {isWeekly && (
+              <Badge tone="navy" size="md">Hebdomadaire</Badge>
+            )}
             {brief.revision > 1 && (
               <Badge tone="warning" size="md">Révision {brief.revision}</Badge>
             )}
@@ -429,24 +446,30 @@ export function BriefDetailPage() {
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Rafraîchir
             </Button>
-            {canRedeliver && (
+            {brief.payload_alt && (
               <Button
-                variant="primary"
+                variant="outline"
                 size="sm"
-                disabled={redeliver.isPending}
-                onClick={async () => {
-                  const ok = await confirm({
-                    title: 'Rejouer la livraison ?',
-                    description: 'Email + WhatsApp seront renvoyés aux destinataires actifs. Ne relance pas la synthèse Opus.',
-                    confirmLabel: 'Rejouer',
-                  })
-                  if (ok) redeliver.mutate()
-                }}
+                onClick={() => navigate(`/briefs/${brief.id}/compare`)}
+                title="Comparer la version Opus vs la version alternative"
               >
-                <RotateCw size={14} className={cn(redeliver.isPending && 'animate-spin')} />
-                {redeliver.isPending ? 'Livraison…' : 'Rejouer la livraison'}
+                Comparer A/B
               </Button>
             )}
+            <Button
+              variant={canRedeliver ? 'primary' : 'outline'}
+              size="sm"
+              disabled={redeliver.isPending}
+              onClick={() => setRedeliverOpen(true)}
+              title={
+                canRedeliver
+                  ? 'Renvoyer le brief (tous les actifs ou cible personnalisée)'
+                  : 'Renvoyer à des destinataires spécifiques (ad-hoc)'
+              }
+            >
+              <RotateCw size={14} className={cn(redeliver.isPending && 'animate-spin')} />
+              {redeliver.isPending ? 'Livraison…' : 'Rejouer la livraison'}
+            </Button>
           </>
         }
       />
@@ -501,97 +524,104 @@ export function BriefDetailPage() {
           </CardBody>
         </Card>
 
-        {/* Market summary */}
-        {payload.market_summary && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Analyse de séance</CardTitle>
-            </CardHeader>
-            <CardBody className="pt-2">
-              <p className="text-sm text-[var(--color-fg)] leading-relaxed whitespace-pre-wrap">
-                {payload.market_summary}
-              </p>
-            </CardBody>
-          </Card>
-        )}
-
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldAlert size={16} className="text-[var(--color-danger)]" />
-                Alertes ({alerts.length})
-              </CardTitle>
-            </CardHeader>
-            <CardBody className="pt-2">
-              <ul className="space-y-2">
-                {alerts.map((a, i) => (
-                  <li key={i} className="text-sm text-[var(--color-fg)] flex gap-2">
-                    <span className="text-[var(--color-danger)] shrink-0">⚠</span>
-                    <span>{a}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-        )}
-
-        {/* Opportunities */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Opportunités <span className="text-[var(--color-fg-muted)] font-normal">({opportunities.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardBody className="pt-2 space-y-3">
-            {opportunities.length === 0 ? (
-              <p className="text-sm text-[var(--color-fg-subtle)]">
-                Aucune opportunité identifiée pour ce brief.
-              </p>
-            ) : (
-              opportunities.map((opp) => (
-                <OpportunityCard
-                  key={`${opp.ticker}-${opp.direction}`}
-                  opp={opp}
-                  signalPrice={signalPriceByTicker.get(opp.ticker)}
-                />
-              ))
+        {isWeekly ? (
+          /* Vue weekly : scorecard + plays + news + week ahead */
+          <WeeklyBriefView payload={brief.payload as WeeklyPayload} />
+        ) : (
+          <>
+            {/* Market summary */}
+            {payload.market_summary && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Analyse de séance</CardTitle>
+                </CardHeader>
+                <CardBody className="pt-2">
+                  <p className="text-sm text-[var(--color-fg)] leading-relaxed whitespace-pre-wrap">
+                    {payload.market_summary}
+                  </p>
+                </CardBody>
+              </Card>
             )}
-          </CardBody>
-        </Card>
 
-        {/* Watchlist updates */}
-        {watchlist.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Watchlist — mises à jour</CardTitle>
-            </CardHeader>
-            <CardBody className="pt-2">
-              <ul className="space-y-1.5">
-                {watchlist.map((w, i) => (
-                  <li key={i} className="text-sm text-[var(--color-fg)] flex gap-2">
-                    <span className="text-[var(--color-fg-muted)] shrink-0">•</span>
-                    <span>{w}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-        )}
+            {/* Alerts */}
+            {alerts.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldAlert size={16} className="text-[var(--color-danger)]" />
+                    Alertes ({alerts.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="pt-2">
+                  <ul className="space-y-2">
+                    {alerts.map((a, i) => (
+                      <li key={i} className="text-sm text-[var(--color-fg)] flex gap-2">
+                        <span className="text-[var(--color-danger)] shrink-0">⚠</span>
+                        <span>{a}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardBody>
+              </Card>
+            )}
 
-        {/* Skip reasons (si synthèse dégradée) */}
-        {payload.skip_reasons && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Raisons de skip</CardTitle>
-            </CardHeader>
-            <CardBody className="pt-2">
-              <p className="text-sm text-[var(--color-fg)] leading-relaxed whitespace-pre-wrap">
-                {payload.skip_reasons}
-              </p>
-            </CardBody>
-          </Card>
+            {/* Opportunities */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Opportunités <span className="text-[var(--color-fg-muted)] font-normal">({opportunities.length})</span>
+                </CardTitle>
+              </CardHeader>
+              <CardBody className="pt-2 space-y-3">
+                {opportunities.length === 0 ? (
+                  <p className="text-sm text-[var(--color-fg-subtle)]">
+                    Aucune opportunité identifiée pour ce brief.
+                  </p>
+                ) : (
+                  opportunities.map((opp) => (
+                    <OpportunityCard
+                      key={`${opp.ticker}-${opp.direction}`}
+                      opp={opp}
+                      signalPrice={signalPriceByTicker.get(opp.ticker)}
+                    />
+                  ))
+                )}
+              </CardBody>
+            </Card>
+
+            {/* Watchlist updates */}
+            {watchlist.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Watchlist — mises à jour</CardTitle>
+                </CardHeader>
+                <CardBody className="pt-2">
+                  <ul className="space-y-1.5">
+                    {watchlist.map((w, i) => (
+                      <li key={i} className="text-sm text-[var(--color-fg)] flex gap-2">
+                        <span className="text-[var(--color-fg-muted)] shrink-0">•</span>
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardBody>
+              </Card>
+            )}
+
+            {/* Skip reasons (si synthèse dégradée) */}
+            {payload.skip_reasons && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Raisons de skip</CardTitle>
+                </CardHeader>
+                <CardBody className="pt-2">
+                  <p className="text-sm text-[var(--color-fg)] leading-relaxed whitespace-pre-wrap">
+                    {payload.skip_reasons}
+                  </p>
+                </CardBody>
+              </Card>
+            )}
+          </>
         )}
 
         {/* Raw payload (debug) */}
@@ -617,6 +647,13 @@ export function BriefDetailPage() {
           )}
         </Card>
       </PageContent>
+
+      <RedeliverDialog
+        open={redeliverOpen}
+        onOpenChange={setRedeliverOpen}
+        loading={redeliver.isPending}
+        onConfirm={(targets) => redeliver.mutate(targets)}
+      />
     </>
   )
 }

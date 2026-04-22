@@ -40,7 +40,7 @@ export interface DataTableProps<T> {
   actions?: ReactNode
 }
 
-const PAGE_SIZES = [25, 50, 100, 200]
+const PAGE_SIZES = [10, 25, 50, 100, 200]
 
 export function DataTable<T>({
   columns,

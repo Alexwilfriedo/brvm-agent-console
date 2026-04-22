@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, CheckCircle2, XCircle, Clock, AlertTriangle,
   Download, Upload, Database, Sparkles, Send, Radio, ChevronRight, Copy, ExternalLink,
-  RotateCw,
+  RotateCw, Inbox,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, PageContent } from '@/components/layout/PageHeader'
@@ -91,10 +91,12 @@ const STEP_DEFS: Record<string, StepDef> = {
 
 function StatusBadge({ status }: { status: RunStatus }) {
   switch (status) {
-    case 'success':        return <Badge tone="success" size="md"><CheckCircle2 size={12} /> Réussi</Badge>
-    case 'failed':         return <Badge tone="danger"  size="md"><XCircle size={12} /> Échec</Badge>
-    case 'running':        return <Badge tone="gold"    size="md"><Clock size={12} /> En cours</Badge>
-    case 'skipped_locked': return <Badge tone="warning" size="md"><AlertTriangle size={12} /> Skippé (lock)</Badge>
+    case 'success':           return <Badge tone="success" size="md"><CheckCircle2 size={12} /> Réussi</Badge>
+    case 'failed':            return <Badge tone="danger"  size="md"><XCircle size={12} /> Échec</Badge>
+    case 'running':           return <Badge tone="gold"    size="md"><Clock size={12} /> En cours</Badge>
+    case 'skipped_locked':    return <Badge tone="warning" size="md"><AlertTriangle size={12} /> Skippé (lock)</Badge>
+    case 'already_generated': return <Badge tone="neutral" size="md"><CheckCircle2 size={12} /> Déjà généré</Badge>
+    case 'no_data':           return <Badge tone="neutral" size="md"><Inbox size={12} /> Aucune donnée</Badge>
   }
 }
 
@@ -421,6 +423,13 @@ export function RunDetailPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
               <Meta label="Statut">
                 <StatusBadge status={r.status} />
+              </Meta>
+              <Meta label="Type">
+                {r.pipeline_type === 'weekly' ? (
+                  <Badge tone="navy">Hebdomadaire</Badge>
+                ) : (
+                  <Badge tone="neutral">Daily</Badge>
+                )}
               </Meta>
               <Meta label="Trigger">
                 <Badge tone="neutral">{r.trigger === 'cron' ? 'Cron automatique' : 'Manuel'}</Badge>

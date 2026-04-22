@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, ListChecks, Radio, Calendar, Users, Eye, LogOut, Sun, Moon, Search, ShieldCheck, LineChart } from 'lucide-react'
+import { LayoutDashboard, FileText, ListChecks, Radio, Calendar, Users, Eye, LogOut, Sun, Moon, Search, ShieldCheck, LineChart, Wallet } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/cn'
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/runs', label: 'Runs', icon: ListChecks },
   { to: '/sources', label: 'Sources', icon: Radio },
   { to: '/recipients', label: 'Destinataires', icon: Users },
+  { to: '/trades', label: 'Trades', icon: Wallet },
   { to: '/schedule', label: 'Planification', icon: Calendar },
   { to: '/preview', label: 'Aperçu email', icon: Eye },
   { to: '/users', label: 'Utilisateurs', icon: ShieldCheck },

@@ -190,3 +190,107 @@ export interface Recipient {
   created_at: string
   updated_at: string
 }
+
+// --- Investment analyses (on-demand Opus) ----------------------------------
+
+export type InvestmentHorizon = 'short' | 'medium' | 'long'
+export type InvestmentRecommendation = 'buy' | 'hold' | 'avoid'
+
+/** Payload Opus (forme attendue — tolérant aux champs manquants). */
+export interface InvestmentAnalysisPayload {
+  recommendation?: InvestmentRecommendation
+  confidence?: number
+  price_at_analysis?: number
+  price_target?: number | null
+  stop_loss?: number | null
+  time_horizon_days?: number | null
+  rationale?: string[]
+  risks?: string[]
+  catalysts?: string[]
+  invalidation?: string
+  valuation_snapshot?: Record<string, number | string | null>
+  liquidity_flag?: boolean
+  data_quality_note?: 'ok' | 'sparse_history' | 'no_news' | 'stale_quotes' | 'partial'
+  _error?: boolean
+  _error_reason?: string
+  _sanitize_issues?: string[]
+}
+
+export interface InvestmentAnalysis {
+  id: number
+  ticker: string
+  horizon: InvestmentHorizon
+  recommendation: InvestmentRecommendation
+  confidence: number
+  price_at_analysis: number
+  price_target: number | null
+  stop_loss: number | null
+  time_horizon_days: number | null
+  payload: InvestmentAnalysisPayload
+  input_tokens: number
+  output_tokens: number
+  model_used: string | null
+  requested_by: string | null
+  requested_at: string
+  from_cache: boolean
+}
+
+/** Vue listing — exclut le payload complet. */
+export interface InvestmentAnalysisSummary {
+  id: number
+  ticker: string
+  horizon: InvestmentHorizon
+  recommendation: InvestmentRecommendation
+  confidence: number
+  price_at_analysis: number
+  price_target: number | null
+  requested_at: string
+  from_cache: boolean
+}
+
+export interface InvestmentAnalysisCreate {
+  ticker: string
+  horizon: InvestmentHorizon
+}
+
+// --- Backfill (import historique reprisable) ------------------------------
+
+export type BackfillSourceType = 'pdf_brvm' | 'csv'
+export type BackfillJobStatus = 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+export type BackfillItemStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped'
+
+export interface BackfillJob {
+  id: number
+  status: BackfillJobStatus
+  source_type: BackfillSourceType
+  total_items: number
+  processed_items: number
+  failed_items: number
+  inserted_quotes: number
+  updated_quotes: number
+  pause_requested: boolean
+  requested_by: string | null
+  message: string | null
+  created_at: string
+  started_at: string | null
+  paused_at: string | null
+  completed_at: string | null
+  updated_at: string
+}
+
+export interface BackfillItem {
+  id: number
+  filename: string
+  kind: 'pdf' | 'csv'
+  status: BackfillItemStatus
+  ticker_hint: string | null
+  inserted_quotes: number
+  updated_quotes: number
+  error: string | null
+  meta: Record<string, unknown>
+  processed_at: string | null
+}
+
+export interface BackfillJobDetail extends BackfillJob {
+  items: BackfillItem[]
+}

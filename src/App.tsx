@@ -21,6 +21,8 @@ import { SchedulePage } from '@/pages/SchedulePage'
 import { UsersPage } from '@/pages/UsersPage'
 import { MarketPage } from '@/pages/MarketPage'
 import { TickerDetailPage } from '@/pages/TickerDetailPage'
+import { AnalysesPage } from '@/pages/AnalysesPage'
+import { BackfillPage } from '@/pages/BackfillPage'
 import { PreviewPage } from '@/pages/PreviewPage'
 
 const queryClient = new QueryClient({
@@ -64,6 +66,8 @@ export function App() {
                 <Route path="sources/:id" element={<SourceDetailPage />} />
                 <Route path="recipients" element={<RecipientsPage />} />
                 <Route path="trades" element={<TradesPage />} />
+                <Route path="analyses" element={<AnalysesPage />} />
+                <Route path="backfill" element={<BackfillPage />} />
                 <Route path="schedule" element={<SchedulePage />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="preview" element={<PreviewPage />} />

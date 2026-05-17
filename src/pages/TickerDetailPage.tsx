@@ -7,6 +7,8 @@ import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { PriceChart } from '@/components/charts/PriceChart'
+import { InvestmentAnalysisPanel } from '@/components/InvestmentAnalysisPanel'
+import { ImportHistoryButton } from '@/components/ImportHistoryButton'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/cn'
 
@@ -226,6 +228,7 @@ export function TickerDetailPage() {
             <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>
               <RefreshCw size={14} className={q.isFetching ? 'animate-spin' : ''} /> Rafraîchir
             </Button>
+            <ImportHistoryButton ticker={d.ticker} />
             <a
               href={sikaUrl}
               target="_blank"
@@ -275,6 +278,9 @@ export function TickerDetailPage() {
             </div>
           </CardBody>
         </Card>
+
+        {/* Analyse d'investissement à la demande */}
+        <InvestmentAnalysisPanel ticker={d.ticker} />
 
         {/* Chart */}
         <Card>
